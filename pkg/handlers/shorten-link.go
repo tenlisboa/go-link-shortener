@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/tenlisboa/go-link-shortener/internal/pkg/jsonp"
 	"net/http"
+	"os"
 
 	"github.com/tenlisboa/go-link-shortener/internal/pkg/random"
 	"github.com/tenlisboa/go-link-shortener/pkg/db"
@@ -51,10 +52,10 @@ func (sl *RetrieveLinkHandler) Store(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	url := fmt.Sprintf("%v/%v", "http://localhost:8080", hash)
+	url := fmt.Sprintf("%v/%v", os.Getenv("APP_URL"), hash)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(shortenLinkEntity{
+	_ = json.NewEncoder(w).Encode(shortenLinkEntity{
 		URL: url,
 	})
 }

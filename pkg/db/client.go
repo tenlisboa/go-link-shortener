@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"os"
 	"sync"
 
 	"github.com/redis/go-redis/v9"
@@ -23,11 +24,8 @@ func GetClient(ctx context.Context) *Client {
 		defer lock.Unlock()
 
 		if instance == nil {
-			redisClient = redis.NewClient(&redis.Options{
-				Addr:     "redis:6379",
-				Password: "",
-				DB:       0,
-			})
+			opt, _ := redis.ParseURL(os.Getenv("REDIS_URL"))
+			redisClient = redis.NewClient(opt)
 
 			instance = &Client{
 				ctx:    ctx,
