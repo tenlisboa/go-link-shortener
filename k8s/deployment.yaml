@@ -17,3 +17,8 @@ spec:
         image: tenlisboa/shorten-link-go:latest
         ports:
         - containerPort: 8080
+        env:
+          - name: REDIS_URL
+            value: "redis://root:longpassword@10.109.120.10:6379"
+          - name: APP_URL
+            value: "http://192.168.49.2:30746"

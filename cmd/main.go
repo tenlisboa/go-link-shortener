@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/joho/godotenv"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -13,6 +14,10 @@ import (
 var ctx = context.Background()
 
 func main() {
+	err := godotenv.Load(".env")
+	if err != nil {
+		panic(err)
+	}
 
 	client := db.GetClient(ctx)
 	r := mux.NewRouter()
@@ -30,5 +35,6 @@ func main() {
 	r.HandleFunc("/{hash}", retrieveHandler.Retrieve)
 
 	fmt.Println("Start to listen server at 8080")
-	http.ListenAndServe(":8080", r)
+	err = http.ListenAndServe(":8080", r)
+	panic(err)
 }
