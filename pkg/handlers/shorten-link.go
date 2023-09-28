@@ -5,12 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/tenlisboa/go-link-shortener/internal/pkg/jsonp"
+	"go.opentelemetry.io/otel"
 	"net/http"
 	"os"
 
 	"github.com/tenlisboa/go-link-shortener/internal/pkg/random"
 	"github.com/tenlisboa/go-link-shortener/pkg/db"
 	"gopkg.in/go-playground/validator.v9"
+)
+
+var (
+	tracer = otel.Tracer("shorten")
 )
 
 type ShortenLinkHandler struct {
@@ -35,6 +40,9 @@ func NewShortenLinkHandler(input ShortenLinkInput) *RetrieveLinkHandler {
 }
 
 func (sl *RetrieveLinkHandler) Store(w http.ResponseWriter, r *http.Request) {
+	_, span := tracer.Start(r.Context(), "shorten")
+	defer span.End()
+
 	body := jsonp.ToStruct[shortenLinkEntity](r.Body)
 
 	v := validator.New()
