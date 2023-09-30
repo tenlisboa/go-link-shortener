@@ -15,17 +15,15 @@ services:
   redis:
     image: redis:7.2.1-alpine
     ports:
-      - 6379:6379
+      - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
       - common
-  elk:
-    image: sebp/elk
+  zipkin:
+    image: openzipkin/zipkin
     ports:
-      - "5601:5601"
-      - "9200:9200"
-      - "5044:5044"
+      - "9411:9411"
     networks:
       - common
 networks:

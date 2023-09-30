@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"github.com/tenlisboa/go-link-shortener/internal/pkg/jsonp"
 	"go.opentelemetry.io/otel"
+	"gopkg.in/go-playground/validator.v9"
 	"net/http"
 	"os"
 
+	localotel "github.com/tenlisboa/go-link-shortener/internal/pkg/otel"
 	"github.com/tenlisboa/go-link-shortener/internal/pkg/random"
 	"github.com/tenlisboa/go-link-shortener/pkg/db"
-	"gopkg.in/go-playground/validator.v9"
 )
 
 var (
@@ -32,28 +33,36 @@ type shortenLinkEntity struct {
 	URL string `json:"url" validate:"required,uri"`
 }
 
-func NewShortenLinkHandler(input ShortenLinkInput) *RetrieveLinkHandler {
-	return &RetrieveLinkHandler{
+func NewShortenLinkHandler(input ShortenLinkInput) *ShortenLinkHandler {
+	return &ShortenLinkHandler{
 		ctx: input.Ctx,
 		dbc: input.Dbc,
 	}
 }
 
-func (sl *RetrieveLinkHandler) Store(w http.ResponseWriter, r *http.Request) {
-	_, span := tracer.Start(r.Context(), "shorten")
+func (sl *ShortenLinkHandler) Store(w http.ResponseWriter, r *http.Request) {
+	tr := localotel.TraceIt(sl.ctx, "store")
+	ctx, span := tr.Start(sl.ctx, "short")
 	defer span.End()
 
 	body := jsonp.ToStruct[shortenLinkEntity](r.Body)
 
+	_, vspan := tr.Start(ctx, "validate")
 	v := validator.New()
 	err := v.Struct(body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
+	vspan.End()
 
+	_, hspan := tr.Start(ctx, "hash")
 	hash := random.Hash(6)
+	hspan.End()
+
+	_, dbspan := tr.Start(ctx, "save on db")
 	err = sl.dbc.Store(hash, body.URL)
+	dbspan.End()
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

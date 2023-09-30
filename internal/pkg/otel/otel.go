@@ -2,92 +2,46 @@ package otel
 
 import (
 	"context"
-	"errors"
-	"time"
-
+	"flag"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/stdout/stdoutmetric"
-	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
-	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/exporters/zipkin"
 	"go.opentelemetry.io/otel/sdk/resource"
-	"go.opentelemetry.io/otel/sdk/trace"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
+	"go.opentelemetry.io/otel/trace"
+	"log"
+	"os"
 )
 
-func SetupOTelSDK(ctx context.Context, serviceName, serviceVersion string) (shutdown func(context.Context) error, err error) {
-	var shutdownFuncs []func(context.Context) error
+func SetupOTelTracer(ctx context.Context) func(context.Context) error {
+	flag.Parse()
 
-	shutdown = func(ctx context.Context) error {
-		var err error
-		for _, fn := range shutdownFuncs {
-			err = errors.Join(err, fn(ctx))
-		}
-		shutdownFuncs = nil
-		return err
-	}
+	serviceName := os.Getenv("SERVICE_NAME")
+	collectorURL := os.Getenv("EXPORTER_ENDPOINT")
 
-	handlerErr := func(inErr error) {
-		err = errors.Join(inErr, shutdown(ctx))
-	}
+	var logger = log.New(os.Stderr, serviceName, log.Ldate|log.Ltime|log.Llongfile)
 
-	res, err := newResource(serviceName, serviceVersion)
+	exporter, err := zipkin.New(
+		collectorURL,
+		zipkin.WithLogger(logger),
+	)
 	if err != nil {
-		handlerErr(err)
-		return
-	}
-	tracerProvider, err := newTraceProvider(res)
-	if err != nil {
-		handlerErr(err)
-		return
+		panic(err)
 	}
 
-	shutdownFuncs = append(shutdownFuncs, tracerProvider.Shutdown)
-	otel.SetTracerProvider(tracerProvider)
-
-	meterProvider, err := newMeterProvider(res)
-	if err != nil {
-		handlerErr(err)
-		return
-	}
-	shutdownFuncs = append(shutdownFuncs, meterProvider.Shutdown)
-	otel.SetMeterProvider(meterProvider)
-
-	return
-}
-
-func newResource(serviceName, serviceVersion string) (*resource.Resource, error) {
-	return resource.Merge(resource.Default(),
-		resource.NewWithAttributes(semconv.SchemaURL,
+	batcher := sdktrace.NewBatchSpanProcessor(exporter)
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithSpanProcessor(batcher),
+		sdktrace.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
 			semconv.ServiceName(serviceName),
-			semconv.ServiceVersion(serviceVersion),
-		))
+		)),
+	)
+	otel.SetTracerProvider(tp)
+
+	return tp.Shutdown
 }
 
-func newTraceProvider(res *resource.Resource) (*trace.TracerProvider, error) {
-	traceExporter, err := stdouttrace.New(
-		stdouttrace.WithPrettyPrint())
-	if err != nil {
-		return nil, err
-	}
-
-	traceProvider := trace.NewTracerProvider(
-		trace.WithBatcher(traceExporter, trace.WithBatchTimeout(time.Second)),
-		trace.WithResource(res),
-	)
-
-	return traceProvider, nil
-}
-
-func newMeterProvider(res *resource.Resource) (*metric.MeterProvider, error) {
-	metricExporter, err := stdoutmetric.New()
-	if err != nil {
-		return nil, err
-	}
-
-	meterProvider := metric.NewMeterProvider(
-		metric.WithResource(res),
-		metric.WithReader(metric.NewPeriodicReader(metricExporter,
-			metric.WithInterval(3*time.Second))),
-	)
-	return meterProvider, nil
+func TraceIt(ctx context.Context, tracerName string) trace.Tracer {
+	return otel.GetTracerProvider().Tracer(tracerName)
 }

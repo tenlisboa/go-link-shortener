@@ -3,4 +3,4 @@ deps:
 	go mod tidy
 
 build: deps
-	go build -o bin/app cmd/main.go
+	go build -gcflags="all=-N -l" -o bin/app cmd/main.go
